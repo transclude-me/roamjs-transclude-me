@@ -3,15 +3,36 @@ import runExtension from "roamjs-components/util/runExtension"
 import {createConfigObserver} from "roamjs-components/components/ConfigPage"
 import {watchTree} from "./watch"
 import {publishBlock, transclusionId} from "./publish"
+import {getSubTree, setInputSetting} from "roamjs-components"
 
 const ID = "transclude-me"
 const CONFIG = toConfigPageName(ID)
-const appUrl = `http://localhost:1234`
-// const appUrl = `https://transclude.me/`
+// const appUrl = `http://localhost:1234`
+const appUrl = `https://transclude.me/`
 
 
-runExtension(ID, () => {
-    createConfigObserver({title: CONFIG, config: {tabs: []}})
+const observedBlocksConfig = "blocksToTransclude"
+
+function saveTranscluded(configPageUid: string, currentBlockId: string) {
+    const {uid: idsUid} = getSubTree({key: observedBlocksConfig, parentUid: configPageUid})
+    return setInputSetting({blockUid: idsUid, key: `((${currentBlockId}))`, value: "raw"})
+}
+
+const transclude = (currentBlockId: string) =>
+    watchTree(currentBlockId, (_, block) => {
+        publishBlock(block)
+    })
+
+function startTrascludingSavedBlocks(configPageUid: string) {
+    const {children: idsChildren} = getSubTree({
+        parentUid: configPageUid,
+        key: observedBlocksConfig,
+    })
+    idsChildren.map((t) => t.text.slice(2, -2)).forEach(transclude)
+}
+
+runExtension(ID, async () => {
+    const {pageUid: configPageUid} = await createConfigObserver({title: CONFIG, config: {tabs: []}})
 
     window.roamAlphaAPI.ui
         .commandPalette
@@ -26,9 +47,10 @@ runExtension(ID, () => {
 
                 await navigator.clipboard.writeText(`${appUrl}/roam/${await transclusionId(currentBlockId)}`)
 
-                watchTree(currentBlockId, (_, block) => {
-                    publishBlock(block)
-                })
+                saveTranscluded(configPageUid, currentBlockId)
+                transclude(currentBlockId)
             },
         })
+
+    startTrascludingSavedBlocks(configPageUid)
 })
