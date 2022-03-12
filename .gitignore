@@ -3,3 +3,6 @@ build
 dist
 out
 .env.local
+
+# Local Netlify folder
+.netlify
